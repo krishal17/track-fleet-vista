@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import VehiclesPage from "./pages/VehiclesPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import DashboardLayout from "./components/layout/DashboardLayout";
@@ -27,7 +28,7 @@ const App = () => (
           {/* Protected routes */}
           <Route path="/" element={<DashboardLayout />}>
             <Route path="dashboard" element={<Dashboard />} />
-            <Route path="vehicles" element={<PlaceholderPage />} />
+            <Route path="vehicles" element={<VehiclesPage />} />
             <Route path="drivers" element={<PlaceholderPage />} />
             <Route path="trips" element={<PlaceholderPage />} />
             <Route path="alerts" element={<PlaceholderPage />} />
