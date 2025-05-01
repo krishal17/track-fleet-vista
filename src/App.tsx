@@ -8,6 +8,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import VehiclesPage from "./pages/VehiclesPage";
+import AlertsPage from "./pages/AlertsPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import DashboardLayout from "./components/layout/DashboardLayout";
@@ -29,9 +30,9 @@ const App = () => (
           <Route path="/" element={<DashboardLayout />}>
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="vehicles" element={<VehiclesPage />} />
+            <Route path="alerts" element={<AlertsPage />} />
             <Route path="drivers" element={<PlaceholderPage />} />
             <Route path="trips" element={<PlaceholderPage />} />
-            <Route path="alerts" element={<PlaceholderPage />} />
             <Route path="reports" element={<PlaceholderPage />} />
             <Route path="settings" element={<PlaceholderPage />} />
           </Route>
