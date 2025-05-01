@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -248,8 +247,10 @@ const AlertsPage = () => {
   };
 
   // Get firmware status badge
-  const getFirmwareBadge = (vehicle: Vehicle) => {
-    if (!vehicle.needs_update) return null;
+  const getFirmwareBadge = (vehicle: Vehicle | undefined) => {
+    // Add null check to prevent errors
+    if (!vehicle || !vehicle.needs_update) return null;
+    
     return (
       <Badge className="bg-orange-500 hover:bg-orange-600 ml-2">
         Firmware Update
@@ -380,7 +381,8 @@ const AlertsPage = () => {
                           <Badge className={`ml-2 ${getSeverityBadgeColor(alert.severity)}`}>
                             {alert.severity}
                           </Badge>
-                          {alert.vehicle && getFirmwareBadge(vehicles.find(v => v.id === alert.vehicle_id) as Vehicle)}
+                          {/* Fixed: Use find and then pass the found vehicle or undefined */}
+                          {getFirmwareBadge(vehicles.find(v => v.id === alert.vehicle_id))}
                         </div>
                         <p className="text-sm text-muted-foreground mb-2">
                           Vehicle: {alert.vehicle?.name} ({alert.vehicle?.license_plate})
