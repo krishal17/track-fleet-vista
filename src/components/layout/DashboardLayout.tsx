@@ -5,13 +5,13 @@ import Sidebar from "./Sidebar";
 import { Menu, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { useMediaQuery } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/App";
 import { toast } from "sonner";
 
 const DashboardLayout = () => {
   const [menuOpen, setMenuOpen] = useState(false);
-  const isMobile = useMediaQuery("(max-width: 768px)");
+  const isMobile = useIsMobile();
   const { signOut } = useAuth();
 
   const handleLogout = async () => {

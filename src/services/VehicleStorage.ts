@@ -33,9 +33,13 @@ export const VehicleStorage = {
       // If we have data from Supabase, return it
       if (data && data.length > 0) {
         return data.map(vehicle => ({
-          ...vehicle,
           id: vehicle.id,
-          position: vehicle.last_lat && vehicle.last_lng ? [vehicle.last_lat, vehicle.last_lng] as [number, number] : undefined
+          name: vehicle.name,
+          type: (vehicle.model as VehicleType) || 'car',
+          licensePlate: vehicle.license_plate,
+          status: vehicle.status as 'active' | 'maintenance' | 'inactive',
+          position: vehicle.last_lat && vehicle.last_lng ? [vehicle.last_lat, vehicle.last_lng] as [number, number] : undefined,
+          fuelLevel: vehicle.fuel_level
         }));
       }
     } catch (error) {
@@ -174,12 +178,13 @@ export const VehicleStorage = {
       // If we have data from Supabase, return it
       if (data && data.length > 0) {
         return data.map(vehicle => ({
-          ...vehicle,
           id: vehicle.id,
+          name: vehicle.name,
+          type: (vehicle.model as VehicleType) || 'car',
           licensePlate: vehicle.license_plate,
+          status: vehicle.status as 'active' | 'maintenance' | 'inactive',
           position: vehicle.last_lat && vehicle.last_lng ? [vehicle.last_lat, vehicle.last_lng] as [number, number] : undefined,
-          fuelLevel: vehicle.fuel_level,
-          type: vehicle.model as VehicleType || 'car'
+          fuelLevel: vehicle.fuel_level
         }));
       }
     } catch (error) {
