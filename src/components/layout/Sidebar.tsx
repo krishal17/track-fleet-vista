@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard,
@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { toast } from "sonner";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
@@ -30,9 +31,22 @@ const menuItems = [
 const Sidebar = () => {
   const [isOpen, setIsOpen] = useState(true);
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
 
   const toggleSidebar = () => {
     setIsOpen(!isOpen);
+  };
+
+  const handleLogout = () => {
+    // In a real app, this would use Supabase auth.signOut()
+    // For now, just clear any local authentication state
+    localStorage.removeItem("isAuthenticated");
+    
+    // Show success toast
+    toast.success("Successfully logged out");
+    
+    // Redirect to login page
+    navigate("/login");
   };
 
   return (
@@ -115,6 +129,7 @@ const Sidebar = () => {
                 "w-full justify-start text-slate-600 hover:bg-slate-100 hover:text-slate-900",
                 !isOpen && "justify-center px-0"
               )}
+              onClick={handleLogout}
             >
               <LogOut className="h-5 w-5 mr-2" />
               {isOpen && <span>Logout</span>}

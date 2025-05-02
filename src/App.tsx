@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -14,6 +14,18 @@ import NotFoundPage from "./pages/NotFoundPage";
 import DashboardLayout from "./components/layout/DashboardLayout";
 
 const queryClient = new QueryClient();
+
+// Protected route wrapper
+const RequireAuth = ({ children }: { children: JSX.Element }) => {
+  const location = useLocation();
+  const isAuthenticated = localStorage.getItem("isAuthenticated") === "true";
+  
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+  
+  return children;
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -27,7 +39,14 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           
           {/* Protected routes */}
-          <Route path="/" element={<DashboardLayout />}>
+          <Route
+            path="/"
+            element={
+              <RequireAuth>
+                <DashboardLayout />
+              </RequireAuth>
+            }
+          >
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="vehicles" element={<VehiclesPage />} />
             <Route path="alerts" element={<AlertsPage />} />
