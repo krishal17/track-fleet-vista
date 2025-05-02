@@ -1,15 +1,16 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Car, Users, Fuel, AlertTriangle, Map, Navigation, Speedometer } from "lucide-react";
+import { Car, Users, Fuel, AlertTriangle, Map as MapIcon, Navigation, Gauge } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import { toast } from "@/components/ui/sonner";
 
 // Fix for default marker icons in react-leaflet
 // This is needed because Leaflet's default markers reference image files that aren't properly loaded in React
@@ -49,60 +50,117 @@ const mockAlerts = [
   { id: 4, vehicle: "Truck 118", type: "Engine Warning", severity: "medium", timestamp: "2023-05-01T11:47:00" },
 ];
 
-// Mock vehicle location data
+// Define geofence areas
+const geofences = [
+  {
+    id: 1,
+    name: "Pokhara",
+    location: [28.2096, 83.9856] as [number, number], // Pokhara, Nepal coordinates
+    radius: 5000, // 5km radius in meters
+    color: "#ff9800",
+    fillColor: "#ff980033",
+  },
+  {
+    id: 2,
+    name: "Kathmandu",
+    location: [27.7172, 85.3240] as [number, number], // Kathmandu, Nepal coordinates
+    radius: 7000, // 7km radius in meters
+    color: "#4caf50",
+    fillColor: "#4caf5033",
+  }
+];
+
+// Mock vehicle location data including history for simulation
 const mockVehicles = [
   { 
     id: 1, 
     type: 'car', 
     name: 'Car 042', 
-    position: [51.505, -0.09], 
+    position: [28.1996, 83.9756] as [number, number], // Near Pokhara
+    previousPositions: [[28.1896, 83.9656], [28.1946, 83.9706]], // To simulate movement
     speed: 65,
     heading: 'North',
-    destination: 'London Central',
+    destination: 'Pokhara Central',
     estimatedArrival: '14:30',
-    driver: 'John Doe'
+    driver: 'John Doe',
+    inGeofence: {} as Record<number, boolean>,  // Track which geofences the vehicle is in
   },
   { 
     id: 2, 
     type: 'truck', 
     name: 'Truck 105', 
-    position: [51.51, -0.1], 
+    position: [28.2296, 83.9956] as [number, number], // In Pokhara
+    previousPositions: [[28.2196, 83.9856], [28.2246, 83.9906]], // To simulate movement
     speed: 45,
     heading: 'East',
-    destination: 'Manchester Distribution Center',
+    destination: 'Pokhara Distribution Center',
     estimatedArrival: '16:15',
-    driver: 'Sarah Connor'
+    driver: 'Sarah Connor',
+    inGeofence: {} as Record<number, boolean>,
   },
   { 
     id: 3, 
     type: 'van', 
     name: 'Van 087', 
-    position: [51.515, -0.09], 
+    position: [27.7072, 85.3140] as [number, number], // Near Kathmandu
+    previousPositions: [[27.6972, 85.3040], [27.7022, 85.3090]], // To simulate movement
     speed: 55,
     heading: 'South',
-    destination: 'Birmingham Office',
+    destination: 'Kathmandu Office',
     estimatedArrival: '15:45',
-    driver: 'Robert Chen'
+    driver: 'Robert Chen',
+    inGeofence: {} as Record<number, boolean>,
   },
   { 
     id: 4, 
     type: 'truck', 
     name: 'Truck 118', 
-    position: [51.52, -0.08], 
+    position: [27.7272, 85.3340] as [number, number], // In Kathmandu
+    previousPositions: [[27.7172, 85.3240], [27.7222, 85.3290]], // To simulate movement
     speed: 30,
     heading: 'West',
-    destination: 'Cardiff Warehouse',
+    destination: 'Kathmandu Warehouse',
     estimatedArrival: '17:20',
-    driver: 'Maria Garcia'
+    driver: 'Maria Garcia',
+    inGeofence: {} as Record<number, boolean>,
   }
 ];
+
+// Function to check if a point is inside a circle (geofence)
+const isPointInCircle = (point: [number, number], circle: [number, number], radius: number): boolean => {
+  // Calculate distance between points in meters
+  const lat1 = point[0];
+  const lon1 = point[1];
+  const lat2 = circle[0];
+  const lon2 = circle[1];
+
+  // Haversine formula to calculate distance
+  const R = 6371e3; // Earth's radius in meters
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+          Math.cos(φ1) * Math.cos(φ2) *
+          Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  const distance = R * c;
+  return distance <= radius;
+};
 
 const Dashboard = () => {
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [stats, setStats] = useState(mockStats);
   const [alerts, setAlerts] = useState(mockAlerts);
   const [selectedVehicle, setSelectedVehicle] = useState<null | typeof mockVehicles[0]>(null);
-  const [mapCenter, setMapCenter] = useState<[number, number]>([51.505, -0.09]); // London coordinates
+  const [mapCenter, setMapCenter] = useState<[number, number]>([28.2096, 83.9856]); // Pokhara coordinates
+  const [vehiclePositions, setVehiclePositions] = useState(mockVehicles);
+  const [geofenceAlerts, setGeofenceAlerts] = useState<{id: number, vehicle: string, geofence: string, timestamp: string}[]>([]);
+  
+  // Reference to track initialization state
+  const initialized = useRef(false);
 
   useEffect(() => {
     // This would fetch data from Supabase in a real app
@@ -112,6 +170,113 @@ const Dashboard = () => {
     
     return () => clearTimeout(timer);
   }, []);
+
+  // Effect to simulate vehicle movement and check geofence status
+  useEffect(() => {
+    if (!isMapLoaded || initialized.current) return;
+    
+    // Mark as initialized to prevent duplicate initialization
+    initialized.current = true;
+    
+    // Initialize geofence status for all vehicles
+    const initializedVehicles = vehiclePositions.map(vehicle => {
+      const vehicleWithGeofence = {...vehicle};
+      geofences.forEach(geofence => {
+        vehicleWithGeofence.inGeofence[geofence.id] = isPointInCircle(
+          vehicle.position, 
+          geofence.location, 
+          geofence.radius
+        );
+      });
+      return vehicleWithGeofence;
+    });
+    setVehiclePositions(initializedVehicles);
+
+    // Set up interval for vehicle movement simulation
+    const movementInterval = setInterval(() => {
+      setVehiclePositions(prevPositions => {
+        // Move the vehicles slightly to simulate movement
+        const updatedPositions = prevPositions.map(vehicle => {
+          // Small random movement
+          const newLat = vehicle.position[0] + (Math.random() - 0.5) * 0.005;
+          const newLng = vehicle.position[1] + (Math.random() - 0.5) * 0.005;
+          
+          const updatedVehicle = {
+            ...vehicle,
+            position: [newLat, newLng] as [number, number],
+            previousPositions: [...vehicle.previousPositions, vehicle.position]
+          };
+          
+          // Check if vehicle has entered or left any geofences
+          geofences.forEach(geofence => {
+            const wasInGeofence = vehicle.inGeofence[geofence.id];
+            const isInGeofence = isPointInCircle(
+              updatedVehicle.position, 
+              geofence.location, 
+              geofence.radius
+            );
+            
+            updatedVehicle.inGeofence[geofence.id] = isInGeofence;
+            
+            // Vehicle has entered a geofence
+            if (isInGeofence && !wasInGeofence) {
+              // Create geofence alert
+              const alertTimestamp = new Date().toISOString();
+              setGeofenceAlerts(prev => [
+                ...prev,
+                {
+                  id: Date.now(),
+                  vehicle: vehicle.name,
+                  geofence: geofence.name,
+                  timestamp: alertTimestamp
+                }
+              ]);
+              
+              // Show toast notification
+              toast(`${vehicle.name} has entered ${geofence.name}`, {
+                description: `Driver: ${vehicle.driver}`,
+                action: {
+                  label: "View",
+                  onClick: () => setSelectedVehicle(updatedVehicle),
+                },
+              });
+              
+              // Add to alerts list
+              setAlerts(prev => [
+                {
+                  id: Date.now(),
+                  vehicle: vehicle.name,
+                  type: `Entered ${geofence.name}`,
+                  severity: "medium",
+                  timestamp: alertTimestamp
+                },
+                ...prev
+              ]);
+            }
+            
+            // Vehicle has exited a geofence
+            if (!isInGeofence && wasInGeofence) {
+              toast(`${vehicle.name} has left ${geofence.name}`, {
+                description: `Driver: ${vehicle.driver}`,
+                action: {
+                  label: "View",
+                  onClick: () => setSelectedVehicle(updatedVehicle),
+                },
+              });
+            }
+          });
+          
+          return updatedVehicle;
+        });
+        
+        return updatedPositions;
+      });
+    }, 5000); // Update every 5 seconds
+    
+    return () => {
+      clearInterval(movementInterval);
+    };
+  }, [isMapLoaded]);
 
   const formatTimestamp = (timestamp: string) => {
     return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -197,14 +362,69 @@ const Dashboard = () => {
               {!isMapLoaded ? (
                 <div className="text-slate-500">Loading map...</div>
               ) : (
-                <div className="w-full h-full p-4">
-                  <div className="w-full h-full bg-slate-200 rounded-md flex items-center justify-center">
-                    <span className="text-slate-600 text-sm">
-                      Map visualization will be displayed here
-                      <br />
-                      (Leaflet or similar map implementation)
-                    </span>
-                  </div>
+                <div className="w-full h-full p-0">
+                  <MapContainer 
+                    center={mapCenter}
+                    zoom={10} 
+                    style={{ height: '100%', width: '100%' }}
+                    zoomControl={false}
+                  >
+                    <TileLayer
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    
+                    {/* Render geofence circles */}
+                    {geofences.map(geofence => (
+                      <Circle
+                        key={geofence.id}
+                        center={geofence.location}
+                        radius={geofence.radius}
+                        pathOptions={{
+                          color: geofence.color,
+                          fillColor: geofence.fillColor,
+                          fillOpacity: 0.2
+                        }}
+                      >
+                        <Popup>
+                          <div className="text-sm p-2">
+                            <p className="font-bold">{geofence.name} Geofence</p>
+                            <p>Radius: {geofence.radius / 1000} km</p>
+                          </div>
+                        </Popup>
+                      </Circle>
+                    ))}
+                    
+                    {/* Render vehicle markers */}
+                    {vehiclePositions.map(vehicle => (
+                      <Marker 
+                        key={vehicle.id} 
+                        position={vehicle.position}
+                        icon={createVehicleIcon(vehicle.type as 'car' | 'truck' | 'van')}
+                        eventHandlers={{
+                          click: () => handleVehicleClick(vehicle)
+                        }}
+                      >
+                        <Popup>
+                          <div className="text-sm">
+                            <p className="font-bold">{vehicle.name}</p>
+                            <p>Driver: {vehicle.driver}</p>
+                            <p>Speed: {vehicle.speed} km/h</p>
+                            {/* Show geofence status */}
+                            {Object.entries(vehicle.inGeofence).map(([geoId, isIn]) => {
+                              const geofence = geofences.find(g => g.id === Number(geoId));
+                              if (!geofence) return null;
+                              return (
+                                <p key={geoId} className={`text-xs mt-1 px-2 py-0.5 rounded-full inline-block mr-1 ${isIn ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                                  {isIn ? `In ${geofence.name}` : `Outside ${geofence.name}`}
+                                </p>
+                              );
+                            })}
+                          </div>
+                        </Popup>
+                      </Marker>
+                    ))}
+                  </MapContainer>
                 </div>
               )}
             </div>
@@ -224,7 +444,7 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {alerts.map((alert) => (
+              {alerts.slice(0, 4).map((alert) => (
                 <div
                   key={alert.id}
                   className="flex items-center justify-between p-3 rounded-md border"
@@ -256,9 +476,9 @@ const Dashboard = () => {
             <Tabs defaultValue="map">
               <TabsList className="mb-4">
                 <TabsTrigger value="map">Map View</TabsTrigger>
+                <TabsTrigger value="geofence">Geofence Events</TabsTrigger>
                 <TabsTrigger value="7days">Last 7 Days</TabsTrigger>
                 <TabsTrigger value="30days">Last 30 Days</TabsTrigger>
-                <TabsTrigger value="90days">Last 90 Days</TabsTrigger>
               </TabsList>
               
               <TabsContent value="map" className="h-96">
@@ -268,19 +488,42 @@ const Dashboard = () => {
                       {selectedVehicle ? `Tracking: ${selectedVehicle.name}` : 'Click on a vehicle to track'}
                     </div>
                     <MapContainer 
-                      center={mapCenter} 
-                      zoom={13} 
+                      center={mapCenter}
+                      zoom={10} 
                       style={{ height: '100%', width: '100%', borderRadius: '0.375rem' }}
                       zoomControl={false}
                     >
                       <TileLayer
-                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                       />
-                      {mockVehicles.map(vehicle => (
+                      
+                      {/* Render geofence circles */}
+                      {geofences.map(geofence => (
+                        <Circle
+                          key={geofence.id}
+                          center={geofence.location}
+                          radius={geofence.radius}
+                          pathOptions={{
+                            color: geofence.color,
+                            fillColor: geofence.fillColor,
+                            fillOpacity: 0.2
+                          }}
+                        >
+                          <Popup>
+                            <div className="text-sm p-2">
+                              <p className="font-bold">{geofence.name} Geofence</p>
+                              <p>Radius: {geofence.radius / 1000} km</p>
+                            </div>
+                          </Popup>
+                        </Circle>
+                      ))}
+                      
+                      {/* Render vehicle markers */}
+                      {vehiclePositions.map(vehicle => (
                         <Marker 
                           key={vehicle.id} 
-                          position={vehicle.position} 
+                          position={vehicle.position}
                           icon={createVehicleIcon(vehicle.type as 'car' | 'truck' | 'van')}
                           eventHandlers={{
                             click: () => handleVehicleClick(vehicle)
@@ -307,7 +550,7 @@ const Dashboard = () => {
                         
                         <div className="space-y-4">
                           <div className="flex items-center">
-                            <Speedometer className="h-4 w-4 mr-2 text-slate-500" />
+                            <Gauge className="h-4 w-4 mr-2 text-slate-500" />
                             <div>
                               <p className="text-xs text-slate-500">Current Speed</p>
                               <p className="text-lg font-semibold">{selectedVehicle.speed} km/h</p>
@@ -325,7 +568,7 @@ const Dashboard = () => {
                           <div className="space-y-1">
                             <p className="text-xs text-slate-500">Destination</p>
                             <div className="flex items-center">
-                              <Map className="h-4 w-4 mr-2 text-slate-500" />
+                              <MapIcon className="h-4 w-4 mr-2 text-slate-500" />
                               <p className="font-medium">{selectedVehicle.destination}</p>
                             </div>
                             <p className="text-sm text-slate-600">ETA: {selectedVehicle.estimatedArrival}</p>
@@ -334,6 +577,24 @@ const Dashboard = () => {
                           <div className="space-y-1">
                             <p className="text-xs text-slate-500">Driver</p>
                             <p className="font-medium">{selectedVehicle.driver}</p>
+                          </div>
+                          
+                          <div className="space-y-1">
+                            <p className="text-xs text-slate-500">Geofence Status</p>
+                            {Object.entries(selectedVehicle.inGeofence).map(([geoId, isIn]) => {
+                              const geofence = geofences.find(g => g.id === Number(geoId));
+                              if (!geofence) return null;
+                              return (
+                                <div 
+                                  key={geoId} 
+                                  className={`text-sm px-2 py-1 rounded-md ${
+                                    isIn ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-600'
+                                  }`}
+                                >
+                                  {isIn ? `In ${geofence.name} zone` : `Outside ${geofence.name} zone`}
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       </div>
@@ -349,6 +610,53 @@ const Dashboard = () => {
                 </div>
               </TabsContent>
               
+              <TabsContent value="geofence" className="h-96">
+                <div className="h-full flex flex-col">
+                  <div className="mb-4">
+                    <h3 className="text-md font-medium mb-2">Geofence Events</h3>
+                    <p className="text-sm text-slate-500">Recent vehicle entries to defined geofence areas</p>
+                  </div>
+                  
+                  {geofenceAlerts.length > 0 ? (
+                    <div className="flex-1 overflow-auto border rounded-md">
+                      <div className="divide-y">
+                        {geofenceAlerts.map((alert) => (
+                          <div key={alert.id} className="p-4 hover:bg-slate-50">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h4 className="font-medium">{alert.vehicle} entered {alert.geofence}</h4>
+                                <p className="text-sm text-slate-500">{formatTimestamp(alert.timestamp)}</p>
+                              </div>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => {
+                                  const vehicle = vehiclePositions.find(v => v.name === alert.vehicle);
+                                  if (vehicle) {
+                                    setSelectedVehicle(vehicle);
+                                    setMapCenter(vehicle.position);
+                                  }
+                                }}
+                              >
+                                View
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex items-center justify-center border rounded-md">
+                      <div className="text-center text-slate-500">
+                        <AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p>No geofence events recorded yet</p>
+                        <p className="text-xs mt-2">Events will appear when vehicles enter defined areas</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+              
               <TabsContent value="7days" className="flex items-center justify-center h-64">
                 <div className="text-center text-slate-500">
                   <p>Trip activity visualization will be displayed here</p>
@@ -359,12 +667,6 @@ const Dashboard = () => {
               <TabsContent value="30days" className="flex items-center justify-center h-64">
                 <div className="text-center text-slate-500">
                   <p>30-day trip activity data</p>
-                </div>
-              </TabsContent>
-              
-              <TabsContent value="90days" className="flex items-center justify-center h-64">
-                <div className="text-center text-slate-500">
-                  <p>90-day trip activity data</p>
                 </div>
               </TabsContent>
             </Tabs>
