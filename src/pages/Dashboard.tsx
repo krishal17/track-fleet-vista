@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -310,6 +309,7 @@ const Dashboard = () => {
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Stat cards */}
         <Card className="stat-card">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="stat-card-title">Total Vehicles</CardTitle>
@@ -364,27 +364,27 @@ const Dashboard = () => {
               ) : (
                 <div className="w-full h-full p-0">
                   <MapContainer 
-                    center={mapCenter}
+                    center={mapCenter as L.LatLngExpression}
                     zoom={10} 
                     style={{ height: '100%', width: '100%' }}
                     zoomControl={false}
                   >
                     <TileLayer
-                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     />
                     
                     {/* Render geofence circles */}
                     {geofences.map(geofence => (
                       <Circle
                         key={geofence.id}
-                        center={geofence.location}
-                        radius={geofence.radius}
+                        center={geofence.location as L.LatLngExpression}
                         pathOptions={{
                           color: geofence.color,
                           fillColor: geofence.fillColor,
                           fillOpacity: 0.2
                         }}
+                        radius={geofence.radius}
                       >
                         <Popup>
                           <div className="text-sm p-2">
@@ -399,11 +399,11 @@ const Dashboard = () => {
                     {vehiclePositions.map(vehicle => (
                       <Marker 
                         key={vehicle.id} 
-                        position={vehicle.position}
-                        icon={createVehicleIcon(vehicle.type as 'car' | 'truck' | 'van')}
+                        position={vehicle.position as L.LatLngExpression}
                         eventHandlers={{
                           click: () => handleVehicleClick(vehicle)
                         }}
+                        icon={createVehicleIcon(vehicle.type as 'car' | 'truck' | 'van')}
                       >
                         <Popup>
                           <div className="text-sm">
@@ -488,7 +488,7 @@ const Dashboard = () => {
                       {selectedVehicle ? `Tracking: ${selectedVehicle.name}` : 'Click on a vehicle to track'}
                     </div>
                     <MapContainer 
-                      center={mapCenter}
+                      center={mapCenter as L.LatLngExpression}
                       zoom={10} 
                       style={{ height: '100%', width: '100%', borderRadius: '0.375rem' }}
                       zoomControl={false}
@@ -502,13 +502,13 @@ const Dashboard = () => {
                       {geofences.map(geofence => (
                         <Circle
                           key={geofence.id}
-                          center={geofence.location}
-                          radius={geofence.radius}
+                          center={geofence.location as L.LatLngExpression}
                           pathOptions={{
                             color: geofence.color,
                             fillColor: geofence.fillColor,
                             fillOpacity: 0.2
                           }}
+                          radius={geofence.radius}
                         >
                           <Popup>
                             <div className="text-sm p-2">
@@ -523,11 +523,11 @@ const Dashboard = () => {
                       {vehiclePositions.map(vehicle => (
                         <Marker 
                           key={vehicle.id} 
-                          position={vehicle.position}
-                          icon={createVehicleIcon(vehicle.type as 'car' | 'truck' | 'van')}
+                          position={vehicle.position as L.LatLngExpression}
                           eventHandlers={{
                             click: () => handleVehicleClick(vehicle)
                           }}
+                          icon={createVehicleIcon(vehicle.type as 'car' | 'truck' | 'van')}
                         >
                           <Popup>
                             <div className="text-sm">
