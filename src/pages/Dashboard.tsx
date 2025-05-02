@@ -2,14 +2,14 @@ import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Car, Users, Fuel, AlertTriangle, Map as MapIcon, Navigation, Gauge } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
+import { Car, Users, Fuel, AlertTriangle, Map as MapIcon, Navigation, Gauge, Calendar } from "lucide-react";
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
+import { Map as LeafletMap } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { toast } from "@/components/ui/sonner";
+import { VehicleStorage, Vehicle } from "@/services/VehicleStorage";
+import { useNavigate } from "react-router-dom";
 
 // Fix for default marker icons in react-leaflet
 // This is needed because Leaflet's default markers reference image files that aren't properly loaded in React
@@ -149,7 +149,17 @@ const isPointInCircle = (point: [number, number], circle: [number, number], radi
   return distance <= radius;
 };
 
+// Custom MapView component to update map center dynamically
+function MapView({ center }: { center: L.LatLngExpression }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center);
+  }, [center, map]);
+  return null;
+}
+
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [stats, setStats] = useState(mockStats);
   const [alerts, setAlerts] = useState(mockAlerts);
@@ -157,6 +167,7 @@ const Dashboard = () => {
   const [mapCenter, setMapCenter] = useState<[number, number]>([28.2096, 83.9856]); // Pokhara coordinates
   const [vehiclePositions, setVehiclePositions] = useState(mockVehicles);
   const [geofenceAlerts, setGeofenceAlerts] = useState<{id: number, vehicle: string, geofence: string, timestamp: string}[]>([]);
+  const [recentVehicles, setRecentVehicles] = useState<Vehicle[]>([]);
   
   // Reference to track initialization state
   const initialized = useRef(false);
@@ -277,6 +288,20 @@ const Dashboard = () => {
     };
   }, [isMapLoaded]);
 
+  // Fetch recent vehicles
+  useEffect(() => {
+    const fetchRecentVehicles = async () => {
+      try {
+        const vehicles = await VehicleStorage.getRecentVehicles(5);
+        setRecentVehicles(vehicles);
+      } catch (error) {
+        console.error("Error fetching recent vehicles:", error);
+      }
+    };
+
+    fetchRecentVehicles();
+  }, []);
+
   const formatTimestamp = (timestamp: string) => {
     return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
@@ -297,6 +322,21 @@ const Dashboard = () => {
   const handleVehicleClick = (vehicle: typeof mockVehicles[0]) => {
     setSelectedVehicle(vehicle);
     setMapCenter(vehicle.position);
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'bg-green-100 text-green-800';
+      case 'maintenance': return 'bg-yellow-100 text-yellow-800';
+      case 'inactive': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  // Format date for display
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return new Date().toLocaleDateString();
+    return new Date(dateString).toLocaleDateString();
   };
 
   return (
@@ -352,6 +392,58 @@ const Dashboard = () => {
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Recently Added Vehicles */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-lg font-medium">
+              <div className="flex items-center">
+                <Car className="h-5 w-5 mr-2 text-blue-500" />
+                Recently Added Vehicles
+              </div>
+            </CardTitle>
+            <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => navigate('/vehicles')}>
+              View all
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {recentVehicles.length === 0 ? (
+              <div className="text-center py-6 text-gray-500">
+                <p>No vehicles added yet</p>
+                <Button variant="outline" size="sm" className="mt-2" onClick={() => navigate('/vehicles')}>
+                  Add Vehicle
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {recentVehicles.map((vehicle) => (
+                  <div
+                    key={vehicle.id}
+                    className="flex items-center justify-between p-3 rounded-md border"
+                  >
+                    <div className="flex flex-col">
+                      <span className="font-medium text-sm">{vehicle.name}</span>
+                      <span className="text-xs text-slate-500">{vehicle.licensePlate}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`text-xs px-2 py-1 rounded-full ${getStatusColor(
+                          vehicle.status
+                        )}`}
+                      >
+                        {vehicle.status}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        <Calendar className="h-3 w-3 inline-block mr-1" />
+                        {formatDate(vehicle.created_at)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        
         {/* Map Section */}
         <Card className="dashboard-map lg:col-span-2 h-80">
           <CardHeader>
@@ -364,11 +456,13 @@ const Dashboard = () => {
               ) : (
                 <div className="w-full h-full p-0">
                   <MapContainer 
-                    center={mapCenter as L.LatLngExpression}
-                    zoom={10} 
+                    key="fleet-map"
                     style={{ height: '100%', width: '100%' }}
+                    zoom={10}
                     zoomControl={false}
+                    center={mapCenter}
                   >
+                    <MapView center={mapCenter} />
                     <TileLayer
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                       attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -378,13 +472,13 @@ const Dashboard = () => {
                     {geofences.map(geofence => (
                       <Circle
                         key={geofence.id}
-                        center={geofence.location as L.LatLngExpression}
+                        center={geofence.location}
+                        radius={geofence.radius}
                         pathOptions={{
                           color: geofence.color,
                           fillColor: geofence.fillColor,
                           fillOpacity: 0.2
                         }}
-                        radius={geofence.radius}
                       >
                         <Popup>
                           <div className="text-sm p-2">
@@ -399,11 +493,11 @@ const Dashboard = () => {
                     {vehiclePositions.map(vehicle => (
                       <Marker 
                         key={vehicle.id} 
-                        position={vehicle.position as L.LatLngExpression}
+                        position={vehicle.position}
+                        icon={createVehicleIcon(vehicle.type as 'car' | 'truck' | 'van')}
                         eventHandlers={{
                           click: () => handleVehicleClick(vehicle)
                         }}
-                        icon={createVehicleIcon(vehicle.type as 'car' | 'truck' | 'van')}
                       >
                         <Popup>
                           <div className="text-sm">
@@ -430,41 +524,6 @@ const Dashboard = () => {
             </div>
           </CardContent>
         </Card>
-        
-        {/* Alerts Section */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-lg font-medium">
-              <div className="flex items-center">
-                <AlertTriangle className="h-5 w-5 mr-2 text-amber-500" />
-                Recent Alerts
-              </div>
-            </CardTitle>
-            <Button variant="ghost" className="h-8 px-2 text-xs">View all</Button>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {alerts.slice(0, 4).map((alert) => (
-                <div
-                  key={alert.id}
-                  className="flex items-center justify-between p-3 rounded-md border"
-                >
-                  <div className="flex flex-col">
-                    <span className="font-medium text-sm">{alert.vehicle}</span>
-                    <span className="text-xs text-slate-500">{formatTimestamp(alert.timestamp)}</span>
-                  </div>
-                  <div
-                    className={`text-xs px-2 py-1 rounded-full border ${getSeverityColor(
-                      alert.severity
-                    )}`}
-                  >
-                    {alert.type}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
       </div>
       
       <div>
@@ -488,11 +547,13 @@ const Dashboard = () => {
                       {selectedVehicle ? `Tracking: ${selectedVehicle.name}` : 'Click on a vehicle to track'}
                     </div>
                     <MapContainer 
-                      center={mapCenter as L.LatLngExpression}
-                      zoom={10} 
+                      key="trip-map"
                       style={{ height: '100%', width: '100%', borderRadius: '0.375rem' }}
+                      zoom={10}
                       zoomControl={false}
+                      center={mapCenter}
                     >
+                      <MapView center={mapCenter} />
                       <TileLayer
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -502,13 +563,13 @@ const Dashboard = () => {
                       {geofences.map(geofence => (
                         <Circle
                           key={geofence.id}
-                          center={geofence.location as L.LatLngExpression}
+                          center={geofence.location}
+                          radius={geofence.radius}
                           pathOptions={{
                             color: geofence.color,
                             fillColor: geofence.fillColor,
                             fillOpacity: 0.2
                           }}
-                          radius={geofence.radius}
                         >
                           <Popup>
                             <div className="text-sm p-2">
@@ -523,7 +584,7 @@ const Dashboard = () => {
                       {vehiclePositions.map(vehicle => (
                         <Marker 
                           key={vehicle.id} 
-                          position={vehicle.position as L.LatLngExpression}
+                          position={vehicle.position}
                           eventHandlers={{
                             click: () => handleVehicleClick(vehicle)
                           }}

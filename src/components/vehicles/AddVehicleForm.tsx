@@ -27,10 +27,11 @@ interface Vehicle {
 interface AddVehicleFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (vehicle: Vehicle) => void;
+  onSave: (vehicle: Vehicle) => Promise<void>;
+  isLoading?: boolean;
 }
 
-const AddVehicleForm = ({ open, onOpenChange, onSave }: AddVehicleFormProps) => {
+const AddVehicleForm = ({ open, onOpenChange, onSave, isLoading = false }: AddVehicleFormProps) => {
   const [vehicleData, setVehicleData] = useState<Omit<Vehicle, 'id'>>({
     name: '',
     type: 'car',
@@ -45,7 +46,7 @@ const AddVehicleForm = ({ open, onOpenChange, onSave }: AddVehicleFormProps) => 
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Generate a unique ID
@@ -54,22 +55,27 @@ const AddVehicleForm = ({ open, onOpenChange, onSave }: AddVehicleFormProps) => 
       id: `v-${Date.now()}`
     };
     
-    // Save the vehicle
-    onSave(newVehicle);
-    
-    // Reset form
-    setVehicleData({
-      name: '',
-      type: 'car',
-      licensePlate: '',
-      status: 'active'
-    });
-    
-    // Close dialog
-    onOpenChange(false);
-    
-    // Show success notification
-    toast.success(`Vehicle "${newVehicle.name}" added successfully`);
+    try {
+      // Save the vehicle
+      await onSave(newVehicle);
+      
+      // Reset form
+      setVehicleData({
+        name: '',
+        type: 'car',
+        licensePlate: '',
+        status: 'active'
+      });
+      
+      // Close dialog
+      onOpenChange(false);
+      
+      // Show success notification
+      toast.success(`Vehicle "${newVehicle.name}" added successfully`);
+    } catch (error) {
+      toast.error("Failed to add vehicle");
+      console.error("Error saving vehicle:", error);
+    }
   };
 
   return (
@@ -151,7 +157,9 @@ const AddVehicleForm = ({ open, onOpenChange, onSave }: AddVehicleFormProps) => 
           </div>
           
           <DialogFooter>
-            <Button type="submit">Add Vehicle</Button>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? "Adding..." : "Add Vehicle"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

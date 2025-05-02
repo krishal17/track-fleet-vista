@@ -9,19 +9,36 @@ import { VehicleStorage, Vehicle } from "@/services/VehicleStorage";
 const VehiclesPage = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [isAddVehicleOpen, setIsAddVehicleOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Load vehicles from local storage
+  // Load vehicles from Supabase or local storage
   useEffect(() => {
-    const storedVehicles = VehicleStorage.getVehicles();
-    setVehicles(storedVehicles);
+    const fetchVehicles = async () => {
+      try {
+        const storedVehicles = await VehicleStorage.getVehicles();
+        setVehicles(storedVehicles);
+      } catch (error) {
+        console.error("Error fetching vehicles:", error);
+      }
+    };
+
+    fetchVehicles();
   }, []);
 
-  const handleSaveVehicle = (vehicle: Vehicle) => {
-    // Save to local storage
-    VehicleStorage.saveVehicle(vehicle);
-    
-    // Update state
-    setVehicles(prev => [...prev, vehicle]);
+  const handleSaveVehicle = async (vehicle: Vehicle) => {
+    setIsLoading(true);
+    try {
+      // Save to Supabase or local storage
+      const savedVehicle = await VehicleStorage.saveVehicle(vehicle);
+      
+      // Update state
+      setVehicles(prev => [savedVehicle, ...prev]);
+    } catch (error) {
+      console.error("Error saving vehicle:", error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -31,6 +48,12 @@ const VehiclesPage = () => {
       case 'inactive': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  // Format date for display
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return new Date().toLocaleDateString();
+    return new Date(dateString).toLocaleDateString();
   };
 
   return (
@@ -73,7 +96,7 @@ const VehiclesPage = () => {
                   <div>
                     <p className="text-gray-500">Added on</p>
                     <p className="font-medium">
-                      {new Date().toLocaleDateString()}
+                      {formatDate(vehicle.created_at)}
                     </p>
                   </div>
                 </div>
@@ -87,6 +110,7 @@ const VehiclesPage = () => {
         open={isAddVehicleOpen}
         onOpenChange={setIsAddVehicleOpen}
         onSave={handleSaveVehicle}
+        isLoading={isLoading}
       />
     </div>
   );
